@@ -28,10 +28,6 @@ paths_df = pandas.DataFrame(list_pos_dir+list_neg_dir, columns=['path', 'label']
 # Load text and transform into vector
 data = tfidfv.fit_transform(paths_df['path'].values)
 
-# Split into train and test
-X, x, Y, y = train_test_split(
-    data.toarray(), paths_df.label, test_size=0.3, random_state=0
-)
 
 #dataframe = pandas.DataFrame(data.toarray(), columns=tfidfv.get_feature_names())
 #print(paths_df, "\n")
@@ -45,6 +41,7 @@ X, x, Y, y = train_test_split(
 
 # gnb method
 def gnb():
+    global X, x, Y, y
     gnb = GaussianNB()
 
     # Complexy analysis
@@ -52,9 +49,22 @@ def gnb():
     #print(result)
     # Simple analysis
     gnb.fit(X,Y)
-    score = gnb.score(x, y)
-    print("test",score)
-    score = gnb.score(X, Y)
-    print("train",score)
+    return (gnb.score(X, Y), gnb.score(x, y))
 
-gnb()
+a= []
+for l in range(1,8):
+    # Split into train and test
+    X, x, Y, y = train_test_split(
+        data.toarray(), paths_df.label, test_size=l/10.0, random_state=0
+    )
+    a.append(gnb())
+    
+    print(a)
+df = pandas.DataFrame(a, columns=['Train', 'Test'],
+        index=[x/10.0 for x in range(1,8)])
+print(df)
+from matplotlib import pyplot
+
+pyplot.plot(df.Train)
+pyplot.plot(df.Test)
+pyplot.show()
