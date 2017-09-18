@@ -1,7 +1,7 @@
 import os
 import pandas
 import numpy
-from dense_transform import DenseTransformer, tokenizer
+from dense_transform import DenseTransformer, tokenizer, tokenizer_correct
 from matplotlib import pyplot
 from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import TfidfTransformer,  CountVectorizer, TfidfVectorizer
@@ -13,7 +13,6 @@ from sklearn.model_selection import cross_validate
 from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import GridSearchCV
 
-
 # Load dirs name
 cur_dir = os.path.realpath('.')
 pos_dir = os.path.join(cur_dir, 'pos')
@@ -21,8 +20,8 @@ neg_dir = os.path.join(cur_dir, 'neg')
 
 
 # Load files names
-list_pos_dir = [ (os.path.join(pos_dir, x), 1) for x in os.listdir(pos_dir)][:50]
-list_neg_dir = [ (os.path.join(neg_dir, x), 0) for x in os.listdir(neg_dir)][:50]
+list_pos_dir = [ (os.path.join(pos_dir, x), 1) for x in os.listdir(pos_dir)][:2]
+list_neg_dir = [ (os.path.join(neg_dir, x), 0) for x in os.listdir(neg_dir)][:2]
 print("registers: {}".format(len(list_pos_dir+list_neg_dir)))
 print("Attention with 6000 registers it will consume about 5+GB of ram")
 # input("Continue? or press CTRL+C")
@@ -32,16 +31,20 @@ paths_df = pandas.DataFrame(list_pos_dir+list_neg_dir, columns=['path', 'label']
 
 # Verify difference between size of tokens with tokenizer stem, stopwords
 tfidf_stem = TfidfVectorizer(input='filename', stop_words='english', tokenizer=tokenizer)
+tfidf_tokenizer_correct = TfidfVectorizer(input='filename', stop_words='english', tokenizer=tokenizer_correct)
+tfidf_stem.fit(paths_df.path.values)
+tfidf_stem.get_feature_names()
 tfidf_stop = TfidfVectorizer(input='filename', stop_words='english')
 tfidf_word = TfidfVectorizer(input='filename')
 
+
 # Simple benchmark for number of features
 result = []
-for tfidf in [tfidf_stem, tfidf_word, tfidf_stop]:
+for tfidf in [tfidf_stem, tfidf_word, tfidf_stop, tfidf_tokenizer_correct]:
     tfidf.fit(paths_df.path.values)
     result.append(len(tfidf.get_feature_names()))
 
-result = pandas.DataFrame(result, columns=['len_of_features'], index=['tfidf_stem', 'tfidf_word', 'tfidf_stop'])
+result = pandas.DataFrame(result, columns=['len_of_features'], index=['tfidf_stem', 'tfidf_word', 'tfidf_stop', 'tfidf_tokenizer_correct'])
 result = result.assign(difference=lambda x: (x.len_of_features - x.len_of_features.min()))
 print(result)
 pyplot.figure(1)
