@@ -1,6 +1,7 @@
 import os
 import pandas
-from dense_transform import DenseTransformer, tokenizer
+import numpy
+from dense_transform import DenseTransformer, tokenizer, tokenizer_correct
 from matplotlib import pyplot
 from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import TfidfTransformer,  CountVectorizer, TfidfVectorizer
@@ -15,18 +16,20 @@ import time
 
 def obtain_data():
     t0 = time.time()
+    global paths_df
     # Load dirs name
     cur_dir = os.path.realpath('.')
     pos_dir = os.path.join(cur_dir, 'train-pos')
     neg_dir = os.path.join(cur_dir, 'train-neg')
 
+
     # Load files names
-    list_pos_dir = [ (os.path.join(pos_dir, x), 1) for x in os.listdir(pos_dir)][:6]
-    list_neg_dir = [ (os.path.join(neg_dir, x), 0) for x in os.listdir(neg_dir)][:6]
+    list_pos_dir = [ (os.path.join(pos_dir, x), 1) for x in os.listdir(pos_dir)][:11]
+    list_neg_dir = [ (os.path.join(neg_dir, x), 0) for x in os.listdir(neg_dir)][:11]
     print("registers: {}".format(len(list_pos_dir+list_neg_dir)))
     print("Attention with 6000 registers it will consume about 5+GB of ram")
     # input("Continue? or press CTRL+C")
-    global paths_df
+
     # Mount data with label data frame
     paths_df = pandas.DataFrame(list_pos_dir+list_neg_dir, columns=['path', 'label'])
 
@@ -36,24 +39,27 @@ def show_number_of_tokens():
     t0 = time.time()
     # Verify difference between size of tokens with tokenizer stem, stopwords
     tfidf_stem = TfidfVectorizer(input='filename', stop_words='english', tokenizer=tokenizer)
+    tfidf_tokenizer_correct = TfidfVectorizer(input='filename', stop_words='english', tokenizer=tokenizer_correct)
+    tfidf_stem.fit(paths_df.path.values)
+    tfidf_stem.get_feature_names()
     tfidf_stop = TfidfVectorizer(input='filename', stop_words='english')
     tfidf_word = TfidfVectorizer(input='filename')
 
+
     # Simple benchmark for number of features
     result = []
-    for tfidf in [tfidf_stem, tfidf_word, tfidf_stop]:
+    for tfidf in [tfidf_stem, tfidf_word, tfidf_stop, tfidf_tokenizer_correct]:
         tfidf.fit(paths_df.path.values)
         result.append(len(tfidf.get_feature_names()))
 
-    result = pandas.DataFrame(result, columns=['len_of_features'], index=['tfidf_stem', 'tfidf_word', 'tfidf_stop'])
+    result = pandas.DataFrame(result, columns=['len_of_features'], index=['tfidf_stem', 'tfidf_word', 'tfidf_stop', 'tfidf_tokenizer_correct'])
     result = result.assign(difference=lambda x: (x.len_of_features - x.len_of_features.min()))
     print(result)
     pyplot.figure(1)
-    pyplot.bar([1,2,3], result.difference.values)
+    pyplot.bar([1,2,3,4], result.difference.values)
     pyplot.xticks([1,2,3], result.index.values)
     pyplot.ylabel('Number of tokens')
     pyplot.xlabel('Method of tf-idf')
-
     print("It took: " + str(time.time() - t0) + " to show number of tokens")
 
 def create_pipes():
@@ -85,7 +91,6 @@ def create_pipes():
         ]),
     }
     print("It took: " + str(time.time() - t0) + " to create pipes")
-
 # Method to return params from pipe params adjusts
 def extract_params(best_params_):
     return {'ngram_range': best_params_['vect__ngram_range'],
@@ -95,6 +100,7 @@ def extract_params(best_params_):
       'stop_words': best_params_['vect__stop_words'],
       'tokenizer': best_params_['vect__tokenizer']
     }
+
 def define_params():
     # Define params
     t0 = time.time()
@@ -112,8 +118,9 @@ def define_params():
 def run_gaussian_NB_pipeline():
     t0 = time.time()
     # Initialize best parameters search
-    parametrized = GridSearchCV(pipes['gaussianNB'], parameters, n_jobs=1)
-    parametrized.fit(paths_df.path, paths_df.label)
+    parametrized = GridSearchCV(pipes['gaussianNB'], parameters, n_jobs=3)
+    parametrized.fit(paths_df.path,paths_df.label)
+    print(parametrized.best_score_, parametrized.best_params_)
 
     pipes['optimizedgaussianNB'] = Pipeline([
           ('vect', TfidfVectorizer(input='filename', **extract_params(parametrized.best_params_))),
@@ -124,7 +131,7 @@ def run_gaussian_NB_pipeline():
 
 def run_bernoulli_NB_pipeline():
     t0 = time.time()
-    parametrized = GridSearchCV(pipes['bernoulliNB'], parameters, n_jobs=1)
+    parametrized = GridSearchCV(pipes['bernoulliNB'], parameters, n_jobs=3)
     parametrized.fit(paths_df.path,paths_df.label)
     print(parametrized.best_score_, parametrized.best_params_)
 
@@ -137,7 +144,8 @@ def run_bernoulli_NB_pipeline():
 
 def run_multinomial_NB_pipeline():
     t0 = time.time()
-    parametrized = GridSearchCV(pipes['multinomialNB'], parameters, n_jobs=1)
+
+    parametrized = GridSearchCV(pipes['multinomialNB'], parameters, n_jobs=3)
     parametrized.fit(paths_df.path,paths_df.label)
     print(parametrized.best_score_, parametrized.best_params_)
 
@@ -161,7 +169,16 @@ def run_linearSVC_pipeline():
 
 def run_sgdclassifier_pipeline():
     t0 = time.time()
-    parametrized = GridSearchCV(pipes['sgdclassifier'], parameters, n_jobs=1)
+
+    parametrized = GridSearchCV(pipes['linearSVC'], parameters, n_jobs=3)
+    parametrized.fit(paths_df.path,paths_df.label)
+    print(parametrized.best_score_, parametrized.best_params_)
+
+    pipes['optimizedlinearSVC'] = Pipeline([
+          ('vect', TfidfVectorizer(input='filename', **extract_params(parametrized.best_params_))),
+          ('gnb', LinearSVC())
+        ])
+    parametrized = GridSearchCV(pipes['sgdclassifier'], parameters, n_jobs=3)
     parametrized.fit(paths_df.path,paths_df.label)
     print(parametrized.best_score_, parametrized.best_params_)
 
@@ -169,12 +186,12 @@ def run_sgdclassifier_pipeline():
           ('vect', TfidfVectorizer(input='filename', **extract_params(parametrized.best_params_))),
           ('gnb', SGDClassifier())
         ])
-    print("It took: " + str(time.time() - t0) + " to obtain data")
+
+    print("It took: " + str(time.time() - t0) + " to run SGD classifier pipeline")
 
 def mount_and_train():
     t0 = time.time()
-    # Execute each pipe in dictionary pipes doing
-    # a score with test and train bases
+    # Execute each pipe in dictionary pipes doing    # a score with test and train bases
     # Variate the size of test and train bases
     index = [x/10.0 for x in range(1,8)]
     global df
