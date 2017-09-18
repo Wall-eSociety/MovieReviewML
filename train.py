@@ -11,16 +11,18 @@ from sklearn.model_selection import train_test_split
 from sklearn.model_selection import cross_validate
 from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import GridSearchCV
+import time
 
 def obtain_data():
+    t0 = time.time()
     # Load dirs name
     cur_dir = os.path.realpath('.')
-    pos_dir = os.path.join(cur_dir, 'pos')
-    neg_dir = os.path.join(cur_dir, 'neg')
+    pos_dir = os.path.join(cur_dir, 'train-pos')
+    neg_dir = os.path.join(cur_dir, 'train-neg')
 
     # Load files names
-    list_pos_dir = [ (os.path.join(pos_dir, x), 1) for x in os.listdir(pos_dir)][:50]
-    list_neg_dir = [ (os.path.join(neg_dir, x), 0) for x in os.listdir(neg_dir)][:50]
+    list_pos_dir = [ (os.path.join(pos_dir, x), 1) for x in os.listdir(pos_dir)][:6]
+    list_neg_dir = [ (os.path.join(neg_dir, x), 0) for x in os.listdir(neg_dir)][:6]
     print("registers: {}".format(len(list_pos_dir+list_neg_dir)))
     print("Attention with 6000 registers it will consume about 5+GB of ram")
     # input("Continue? or press CTRL+C")
@@ -28,8 +30,10 @@ def obtain_data():
     # Mount data with label data frame
     paths_df = pandas.DataFrame(list_pos_dir+list_neg_dir, columns=['path', 'label'])
 
-def show_number_of_tokens():
+    print("It took: " + str(time.time() - t0) + " to obtain data")
 
+def show_number_of_tokens():
+    t0 = time.time()
     # Verify difference between size of tokens with tokenizer stem, stopwords
     tfidf_stem = TfidfVectorizer(input='filename', stop_words='english', tokenizer=tokenizer)
     tfidf_stop = TfidfVectorizer(input='filename', stop_words='english')
@@ -50,8 +54,11 @@ def show_number_of_tokens():
     pyplot.ylabel('Number of tokens')
     pyplot.xlabel('Method of tf-idf')
 
+    print("It took: " + str(time.time() - t0) + " to show number of tokens")
+
 def create_pipes():
     global pipes
+    t0 = time.time()
     # Create pipes
     pipes = {
         'gaussianNB': Pipeline([
@@ -77,6 +84,7 @@ def create_pipes():
           ( 'gnb', SGDClassifier(max_iter=5))
         ]),
     }
+    print("It took: " + str(time.time() - t0) + " to create pipes")
 
 # Method to return params from pipe params adjusts
 def extract_params(best_params_):
@@ -89,6 +97,7 @@ def extract_params(best_params_):
     }
 def define_params():
     # Define params
+    t0 = time.time()
     global parameters
     parameters = {
       'vect__ngram_range': [(1,1), (1,2)],
@@ -98,8 +107,10 @@ def define_params():
       'vect__stop_words': ('english', None),
       'vect__tokenizer': (None, tokenizer),
     }
+    print("It took: " + str(time.time() - t0) + " to define parameters")
 
 def run_gaussian_NB_pipeline():
+    t0 = time.time()
     # Initialize best parameters search
     parametrized = GridSearchCV(pipes['gaussianNB'], parameters, n_jobs=1)
     parametrized.fit(paths_df.path, paths_df.label)
@@ -109,7 +120,10 @@ def run_gaussian_NB_pipeline():
           ('dense', DenseTransformer()),
           ('gnb', GaussianNB())
         ])
+    print("It took: " + str(time.time() - t0) + " to run gaussian NB pipeline")
+
 def run_bernoulli_NB_pipeline():
+    t0 = time.time()
     parametrized = GridSearchCV(pipes['bernoulliNB'], parameters, n_jobs=1)
     parametrized.fit(paths_df.path,paths_df.label)
     print(parametrized.best_score_, parametrized.best_params_)
@@ -119,7 +133,10 @@ def run_bernoulli_NB_pipeline():
           ('dense', DenseTransformer()),
           ('gnb', BernoulliNB())
         ])
+    print("It took: " + str(time.time() - t0) + " to run bernoulli NB pipeline")
+
 def run_multinomial_NB_pipeline():
+    t0 = time.time()
     parametrized = GridSearchCV(pipes['multinomialNB'], parameters, n_jobs=1)
     parametrized.fit(paths_df.path,paths_df.label)
     print(parametrized.best_score_, parametrized.best_params_)
@@ -128,7 +145,10 @@ def run_multinomial_NB_pipeline():
           ('vect', TfidfVectorizer(input='filename', **extract_params(parametrized.best_params_))),
           ( 'gnb', MultinomialNB())
         ])
+    print("It took: " + str(time.time() - t0) + " to run multinomial NB pipeline")
+
 def run_linearSVC_pipeline():
+    t0 = time.time()
     parametrized = GridSearchCV(pipes['linearSVC'], parameters, n_jobs=1)
     parametrized.fit(paths_df.path,paths_df.label)
     print(parametrized.best_score_, parametrized.best_params_)
@@ -137,7 +157,10 @@ def run_linearSVC_pipeline():
           ('vect', TfidfVectorizer(input='filename', **extract_params(parametrized.best_params_))),
           ('gnb', LinearSVC())
         ])
+    print("It took: " + str(time.time() - t0) + " to run linear SVC pipeline")
+
 def run_sgdclassifier_pipeline():
+    t0 = time.time()
     parametrized = GridSearchCV(pipes['sgdclassifier'], parameters, n_jobs=1)
     parametrized.fit(paths_df.path,paths_df.label)
     print(parametrized.best_score_, parametrized.best_params_)
@@ -146,8 +169,10 @@ def run_sgdclassifier_pipeline():
           ('vect', TfidfVectorizer(input='filename', **extract_params(parametrized.best_params_))),
           ('gnb', SGDClassifier())
         ])
+    print("It took: " + str(time.time() - t0) + " to obtain data")
 
 def mount_and_train():
+    t0 = time.time()
     # Execute each pipe in dictionary pipes doing
     # a score with test and train bases
     # Variate the size of test and train bases
@@ -168,7 +193,10 @@ def mount_and_train():
         columns = ["train_{}".format(pipe_name), "test_{}".format(pipe_name)]
         new_df = pandas.DataFrame(temp, columns=columns, index=index)
         df = df.join(new_df)
+    print("It took: " + str(time.time() - t0) + " to mount and train")
+
 def plot_all():
+    t0 = time.time()
     # Plot all
     pyplot.figure(2)
 
@@ -219,28 +247,18 @@ def plot_all():
     print(df.ix[df.idxmax()])
 
     pyplot.show()
+    print("It took: " + str(time.time() - t0) + " to plot graphs")
 
 
 obtain_data()
-print ("1")
 show_number_of_tokens()
-print ("2")
 create_pipes()
-print ("3")
 #extract_params()
 define_params()
-print ("5")
 run_gaussian_NB_pipeline()
-print ("6")
 run_bernoulli_NB_pipeline()
-print ("7")
 run_multinomial_NB_pipeline()
-print ("8")
 run_linearSVC_pipeline()
-print ("9")
 run_sgdclassifier_pipeline()
-print ("10")
 mount_and_train()
-print ("11")
 plot_all()
-print ("12")
